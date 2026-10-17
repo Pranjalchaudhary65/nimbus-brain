@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimbus Brain</title>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#0f1117;color:#e6e6e6}
+  header{padding:16px 24px;border-bottom:1px solid #2a2d3a}
+  h1{margin:0;font-size:20px}
+  .sub{color:#9aa0b4;font-size:13px;margin-top:4px}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 24px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:#171a23;border:1px solid #2a2d3a;border-radius:10px;padding:16px}
+  input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #3a3f52;background:#0f1117;color:#fff;font-size:15px}
+  button{margin-top:8px;margin-right:6px;padding:8px 14px;border:0;border-radius:8px;background:#6c5ce7;color:#fff;cursor:pointer}
+  button.ex{background:#232738;font-size:12px}
+  #answer{white-space:pre-wrap;line-height:1.5;margin-top:14px}
+  #graph{height:420px;border-radius:8px;background:#0f1117}
+  #steps{font-size:13px;color:#b9bfd4;margin-top:10px;line-height:1.6}
+  code{background:#232738;padding:1px 6px;border-radius:4px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Nimbus Brain</h1>
+  <div class="sub">A company brain on FalkorDB. Every answer shows the graph path behind it.</div>
+</header>
+<main>
+  <section class="card">
+    <input id="q" placeholder="Ask about Nimbus Labs...">
+    <div><button onclick="send()">Ask</button></div>
+    <div>
+      <button class="ex" onclick="ex(this)">Why did we choose Adyen for EU payments?</button>
+      <button class="ex" onclick="ex(this)">What breaks if billing-service changes?</button>
+      <button class="ex" onclick="ex(this)">Who owns billing-service?</button>
+      <button class="ex" onclick="ex(this)">What did we discuss earlier about billing-service?</button>
+    </div>
+    <div id="answer"></div>
+  </section>
+  <section class="card">
+    <div id="graph"></div>
+    <div id="steps"></div>
+  </section>
+</main>
+<script>
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function ex(b){document.getElementById("q").value=b.textContent;send();}
+
+async function send(){
+  const q=document.getElementById("q").value.trim();
+  if(!q) return;
+  const ans=document.getElementById("answer");
+  ans.textContent="Thinking... (the free LLM tier can take up to a minute)";
+  try{
+    const r=await fetch("/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({question:q,user_id:"pranjal"})});
+    if(!r.ok) throw new Error("Server error "+r.status);
+    const d=await r.json();
+        ans.innerHTML=esc(d.answer||"")
+      .replace(/^#{1,6}\s*(.+)$/gm,"<b>$1</b>")
+      .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
+      .replace(/`([^`]+)`/g,"<code>$1</code>");
+    draw(d.path||[]);
+  }catch(e){ ans.textContent="Error: "+e.message; }
+}
+
+function draw(path){
+  const nodes=new Map(), edges=[];
+  path.forEach(s=>{
+    [s.from,s.to].forEach(n=>{
+      if(n && !nodes.has(n)) nodes.set(n,{id:n,label:n.length>28?n.slice(0,26)+"…":n,title:n,
+        shape:"box",color:{background:"#6c5ce7",border:"#a29bfe"},font:{color:"#ffffff"}});
+    });
+    edges.push({from:s.from,to:s.to,label:s.rel,arrows:"to",
+      font:{color:"#9aa0b4",size:11,strokeWidth:0},color:{color:"#6b7090"}});
+  });
+  new vis.Network(document.getElementById("graph"),
+    {nodes:new vis.DataSet([...nodes.values()]),edges:new vis.DataSet(edges)},
+    {physics:{stabilization:true}});
+  document.getElementById("steps").innerHTML="<b>Path used ("+path.length+" links)</b><br>"+
+    path.map(s=>esc(s.from)+" —"+esc(s.rel)+"→ "+esc(s.to)).join("<br>");
+}
+document.getElementById("q").addEventListener("keydown",e=>{ if(e.key==="Enter") send(); });
+</script>
+</body>
+</html>
