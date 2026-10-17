@@ -36,6 +36,8 @@
       <button class="ex" onclick="ex(this)">What breaks if billing-service changes?</button>
       <button class="ex" onclick="ex(this)">Who owns billing-service?</button>
       <button class="ex" onclick="ex(this)">What did we discuss earlier about billing-service?</button>
+      <button class="ex" onclick="ex(this)">Who knows most about payments?</button>
+            <button class="ex" onclick="ex(this)">We decided to add a read replica for analytics queries, replacing the ClickHouse decision. Please record it.</button>
     </div>
     <div id="answer"></div>
   </section>
@@ -66,7 +68,13 @@ async function send(){
   }catch(e){ ans.textContent="Error: "+e.message; }
 }
 
-function draw(path){
+
+    function draw(path){
+  if(!path.length){
+    document.getElementById("graph").innerHTML="";
+    document.getElementById("steps").innerHTML="No graph path for this answer.";
+    return;
+  }
   const nodes=new Map(), edges=[];
   path.forEach(s=>{
     [s.from,s.to].forEach(n=>{
