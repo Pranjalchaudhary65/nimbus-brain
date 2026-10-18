@@ -193,7 +193,6 @@ the graph model, the queries and the architecture.
 
 ## Team
 
-Pranjal Chaudhary 
-PRADEEP KUMAR YADAV
-Adarsh Yadav
-
+- Pranjal Chaudhary
+- Pradeep Kumar Yadav
+- Adarsh Yadav
