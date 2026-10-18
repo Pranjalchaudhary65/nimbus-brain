@@ -10,7 +10,7 @@ and edges** that produced it, drawn as a graph in the web UI. All data is synthe
 
 **Tracks:** Company Brain, Agents That Act on Connected Data
 
-**Demo video:** (YouTube link goes here)
+**Demo video:** https://youtu.be/afRaRXNFN8s
 
 ## Screenshots
 
@@ -196,3 +196,4 @@ the graph model, the queries and the architecture.
 Pranjal Chaudhary 
 PRADEEP KUMAR YADAV
 Adarsh Yadav
+
