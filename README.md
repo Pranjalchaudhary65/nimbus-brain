@@ -2,21 +2,54 @@
 
 An AI agent that answers questions about a company by **following connections in a
 FalkorDB graph**: who owns what, why a decision was made, what breaks if a service
-changes, and what the user asked before. Every answer comes back with the **path of
-nodes and edges** that produced it. All data is synthetic (a fictional company,
-Nimbus Labs).
+changes, who knows most about a topic, and what the user asked before. It can also
+**act**: when the company changes a decision, the agent writes the new decision into
+the graph and supersedes the old one. Every answer comes back with the **path of nodes
+and edges** that produced it, drawn as a graph in the web UI. All data is synthetic
+(a fictional company called Nimbus Labs).
 
-**Tracks:** Company Brain, Agent Memory and Coordination
+**Tracks:** Company Brain, Agents That Act on Connected Data
 
-**Demo video:** (link added at submission)
-**Live deployment:** (link added at submission, or use the local setup below)
+**Demo video:** (YouTube link goes here)
+
+## Screenshots
+
+What breaks if billing-service changes (multi-hop dependency path):
+
+![impact](screenshots/impact.png)
+
+Why was a decision made (decision history traced to its source documents):
+
+![trace](screenshots/trace.png)
+
+Memory that survives a server restart:
+
+![memory](screenshots/memory.png)
+
+Why Adyen was chosen for EU payments:
+
+![adyen](screenshots/adyen.png)
+
+Who owns a project:
+
+![owner](screenshots/owner.png)
+
+Who knows most about a topic:
+
+![who-knows](screenshots/who-knows.png)
+
+The agent recording a new decision in the graph:
+
+![record-decision](screenshots/record-decision.png)
 
 ## Why FalkorDB is essential
 
-- Every answer is a multi-hop graph traversal (decision history, dependency chains,
-  ownership). The LLM only chooses a tool and writes the final sentence.
-- Memory is stored in the graph as `User` and `Interaction` nodes linked to the
-  projects, people and decisions they mention, so recall is a traversal.
+- Every answer is a graph traversal (decision history, dependency chains, ownership,
+  authorship). The LLM only chooses a tool and writes the final sentence from the results.
+- The agent acts on the graph: `record_decision` creates a new Decision node, links it
+  with `SUPERSEDES`, and marks the old one superseded, so knowledge stays current.
+- Memory lives in the graph as `User` and `Interaction` nodes linked to the projects,
+  people and decisions they mention, so recall is a traversal and survives restarts.
 - Without FalkorDB there is nothing for the agent to query, so the product does not work.
 
 ## Graph data model
@@ -47,7 +80,7 @@ Nimbus Labs).
 | (User)-[:ASKED]->(Interaction) | what a user asked |
 | (Interaction)-[:MENTIONS]->(any node) | what the question involved |
 
-## Key Cypher queries
+## Agent tools and the Cypher behind them
 
 Why was a decision made (follows `SUPERSEDES` and `BASED_ON`, up to 3 hops):
 
@@ -72,8 +105,31 @@ OPTIONAL MATCH (p)-[:MEMBER_OF]->(t:Team)
 RETURN p.name, p.role, t.name
 ```
 
-Recall what a user asked earlier about an entity (persistent memory):
+Who knows most about a topic (ranked by documents written):
 
+```cypher
+MATCH (p:Person)-[:AUTHORED]->(d:Document)-[:ABOUT]->(t:Topic {name:$t})
+RETURN p.name, p.role, count(d) AS docs, collect(d.title)
+ORDER BY docs DESC
+```
+
+Record a new decision that replaces an active one (the agent acts on the graph):
+
+```cypher
+MATCH (o:Decision {id:$old})-[:ABOUT]->(j:Project)
+CREATE (nw:Decision {id:$nid, title:$title, date:$date, status:'active'})
+CREATE (nw)-[:SUPERSEDES]->(o)
+CREATE (nw)-[:ABOUT]->(j)
+SET o.status = 'superseded'
+```
+
+Save and recall memory (persistent across sessions):
+
+```cypher
+MERGE (u:User {id:$u})
+CREATE (i:Interaction {id:$i, question:$q, answer:$a, ts:$ts})
+CREATE (u)-[:ASKED]->(i)
+```
 ```cypher
 MATCH (u:User {id:$u})-[:ASKED]->(i:Interaction)-[:MENTIONS]->(e)
 WHERE e.name = $x OR e.id = $x
@@ -83,12 +139,13 @@ RETURN DISTINCT i.question, i.answer, i.ts ORDER BY i.ts DESC
 ## Architecture
 
 - `backend/seed.py`: synthetic company data
-- `backend/load_graph.py`: loads the data into FalkorDB
+- `backend/load_graph.py`: loads the data into FalkorDB (re-running it resets the graph)
 - `backend/tools.py`: graph tools that return an answer plus its path
 - `backend/memory.py`: saves and recalls interactions in the graph
 - `backend/agent.py`: Gemini function calling picks a tool, runs it, and writes the answer
+- `backend/api.py` and `backend/static/index.html`: FastAPI server and web UI that draws the path
 
-## Setup
+## Setup (local)
 
 1. Create a free FalkorDB Cloud instance at app.falkordb.cloud, or run FalkorDB
    locally with `docker run -p 6379:6379 -p 3000:3000 --rm falkordb/falkordb`
@@ -103,21 +160,26 @@ pip install -r requirements.txt
 ```
 
 4. Copy `.env.example` to `.env` and fill in your own values.
-5. Load the graph and run the agent:
+5. Load the graph and start the app:
 
 ```bash
 cd backend
 python load_graph.py          # expect: Nodes: 50, Edges: 96
-python agent.py               # asks three sample questions
-python memory_demo.py ask     # then, in a separate run:
-python memory_demo.py recall  # shows memory surviving between runs
+uvicorn api:app --reload      # then open http://127.0.0.1:8000
 ```
 
-## Example
+## Try these questions
 
-Question: "Why did we choose Adyen for EU payments?" The agent calls `trace_decision`,
-returns the decision, the older Stripe decision it replaced, and the documents behind
-both (5 links), and writes its answer from exactly those results.
+1. Why did we choose Adyen for EU payments?
+2. What breaks if billing-service changes?
+3. Who owns billing-service?
+4. Who knows most about payments?
+5. We decided to add a read replica for analytics queries, replacing the ClickHouse decision. Please record it.
+6. Trace decision dc7
+7. Restart the server, then ask: What did we discuss earlier about billing-service?
+
+Note: the free Gemini tier is rate limited (about 5 requests per minute), so an answer
+can take up to a minute. The agent retries automatically.
 
 ## Data
 
@@ -131,4 +193,6 @@ the graph model, the queries and the architecture.
 
 ## Team
 
-(Add the names of all 3 team members.)
+Pranjal Chaudhary 
+PRADEEP KUMAR YADAV
+Adarsh Yadav
